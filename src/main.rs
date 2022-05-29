@@ -38,8 +38,9 @@ struct Config {
 }
 
 impl Config {
-    fn get_resource(&self, name: String) -> Option<Resource> {
-        (*self.resources)[..].to_vec().into_iter().find(|x| x.name == name)
+    fn get_resource(&self, name: &str) -> Option<&Resource> {
+        println!("{:?}, {}", self.resources.iter(), name);
+        self.resources.iter().find(|&r| r.name == name)
     }
 }
 
@@ -54,7 +55,7 @@ impl Clone for Config {
 }
 
 trait WSProxyRequest {
-    fn handle(self, config: Config);
+    fn handle(&self, config: &Config);
 }
 
 #[derive(Deserialize, Debug)]
@@ -64,11 +65,16 @@ struct WSProxyCallRequest {
 }
 
 impl WSProxyRequest for WSProxyCallRequest {
-    fn handle(self, config: Config) {
-        println!("Handling request {}: {}", self.uid, self.resource);
-        let resource = config.get_resource(self.resource);
+    fn handle(&self, config: &Config) {
+        let uid = &self.uid;
+        let resource_name = &self.resource;
+        println!("Handling request {}: {}", uid, resource_name);
+        let resource = config.get_resource(resource_name);
         if resource.is_some() {
-            thread::spawn(|| handle_request(self.uid, resource.unwrap().url));
+            println!("{:?}", resource.unwrap());
+            // thread::spawn(|| handle_request(uid, resource.unwrap().url.borrow()));
+        } else {
+            println!("unable to find resource with name {}", resource_name)
         }
     }
 }
@@ -77,7 +83,7 @@ impl WSProxyRequest for WSProxyCallRequest {
 struct WSProxyPing {}
 
 impl WSProxyRequest for WSProxyPing {
-    fn handle(self, _config: Config) {
+    fn handle(&self, _config: &Config) {
         println!("Ping")
     }
 }
@@ -85,7 +91,7 @@ impl WSProxyRequest for WSProxyPing {
 struct WSProxyUnknownRequest {}
 
 impl WSProxyRequest for WSProxyUnknownRequest {
-    fn handle(self, _config: Config) {
+    fn handle(&self, _config: &Config) {
         println!("Unknown request")
     }
 }
@@ -112,8 +118,8 @@ fn read_ws_message(value: String) -> Box<dyn WSProxyRequest> {
         }
         "request" => {
             Box::new(WSProxyCallRequest {
-                uid: msg["uid"].to_string(),
-                resource: msg["resource"].to_string(),
+                uid: msg["uid"].as_str().unwrap().to_string(),
+                resource: msg["resource"].as_str().unwrap().to_string(),
             })
         }
         _ => {
@@ -122,7 +128,7 @@ fn read_ws_message(value: String) -> Box<dyn WSProxyRequest> {
     }
 }
 
-fn call_resource(request_id: String, url: String) -> Result<ResourceResponse, Box<dyn Error>> {
+fn call_resource(request_id: &str, url: &str) -> Result<ResourceResponse, Box<dyn Error>> {
     // println!("{:?}", config.get_resource(resource_name));
     // let body = reqwest::get(config.get_resource(resource_name)).await?.text().await?;
     println!("{}: {}", request_id, url);
@@ -135,7 +141,7 @@ fn call_resource(request_id: String, url: String) -> Result<ResourceResponse, Bo
 //
 // }
 
-fn handle_request(request_id: String, url: String) {
+fn handle_request(request_id: &str, url: &str) {
     let response = call_resource(request_id, url).unwrap();
     println!("{:?}", response);
 }
@@ -236,7 +242,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 OwnedMessage::Text(value) => {
                     println!("Receive Loop: {:?}", value);
                     let request = read_ws_message(value);
-                    request.handle(config);
+                    request.handle(&config);
                     return;
                 }
                 _ => {
