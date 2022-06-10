@@ -4,9 +4,11 @@
 extern crate websocket;
 
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufReader, stdin};
+use std::net::TcpStream;
 use std::path::Path;
 use std::sync::mpsc::channel;
 use std::thread;
@@ -16,6 +18,8 @@ use serde_json::Value;
 
 use websocket::client::ClientBuilder;
 use websocket::{Message, OwnedMessage};
+use std::sync::mpsc::Sender;
+use websocket::sender::Writer;
 // use websocket::{Message, OwnedMessage};
 
 // const CONNECTION: &'static str = "ws://127.0.0.1:2794";
@@ -37,11 +41,35 @@ struct Config {
     // cf_access_secret: String,
 }
 
+#[derive(Serialize, Debug)]
+struct ResourceResponse {
+    status: u16,
+    body: String,
+}
+
+#[derive(Serialize)]
+struct ResponseMessage {
+    #[serde(rename(serialize = "type"))]
+    message_type: String,
+    uid: String,
+    body: String,
+    status: u16,
+}
+
 impl Config {
-    fn get_resource(&self, name: &str) -> Option<&Resource> {
-        println!("{:?}, {}", self.resources.iter(), name);
-        self.resources.iter().find(|&r| r.name == name)
+    fn get_resource_map(&self) -> HashMap<&String, &String> {
+        let mut result = HashMap::new();
+        for resource in &self.resources[..] {
+            result.insert(&resource.name, &resource.url);
+        }
+        // make result immutable
+        // let result = result;
+        result
     }
+
+    // fn get_resource(&self, name: &str) -> Option<&Resource> {
+    //     self.resources.iter().find(|&r| r.name == name)
+    // }
 }
 
 impl Clone for Config {
@@ -55,7 +83,7 @@ impl Clone for Config {
 }
 
 trait WSProxyRequest {
-    fn handle(&self, config: &Config);
+    fn handle(&self, config: &Config, tx: Sender<OwnedMessage>);
 }
 
 #[derive(Deserialize, Debug)]
@@ -65,17 +93,22 @@ struct WSProxyCallRequest {
 }
 
 impl WSProxyRequest for WSProxyCallRequest {
-    fn handle(&self, config: &Config) {
-        let uid = &self.uid;
+    fn handle(&self, config: &Config, tx: Sender<OwnedMessage>) {
+        let uid = self.uid.clone();
         let resource_name = &self.resource;
         println!("Handling request {}: {}", uid, resource_name);
-        let resource = config.get_resource(resource_name);
-        if resource.is_some() {
-            println!("{:?}", resource.unwrap());
-            // thread::spawn(|| handle_request(uid, resource.unwrap().url.borrow()));
-        } else {
-            println!("unable to find resource with name {}", resource_name)
+        let resource_map = config.get_resource_map();
+        let resource_url = resource_map.get(resource_name);
+        if resource_url.is_none() {
+            println!("unable to find resource with name {}", resource_name);
+            return
         }
+
+        let resource_url = resource_url.unwrap().to_string();
+
+        println!("resource_url: {}", resource_url);
+
+        thread::spawn(|| handle_request(uid, resource_url, tx));
     }
 }
 
@@ -83,7 +116,7 @@ impl WSProxyRequest for WSProxyCallRequest {
 struct WSProxyPing {}
 
 impl WSProxyRequest for WSProxyPing {
-    fn handle(&self, _config: &Config) {
+    fn handle(&self, _config: &Config, tx: Sender<OwnedMessage>) {
         println!("Ping")
     }
 }
@@ -91,15 +124,9 @@ impl WSProxyRequest for WSProxyPing {
 struct WSProxyUnknownRequest {}
 
 impl WSProxyRequest for WSProxyUnknownRequest {
-    fn handle(&self, _config: &Config) {
+    fn handle(&self, _config: &Config, tx: Sender<OwnedMessage>) {
         println!("Unknown request")
     }
-}
-
-#[derive(Serialize, Debug)]
-struct ResourceResponse {
-    status: i32,
-    body: String,
 }
 
 fn read_config_from_file<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn Error>> {
@@ -123,27 +150,39 @@ fn read_ws_message(value: String) -> Box<dyn WSProxyRequest> {
             })
         }
         _ => {
+            // Box::new(WSProxyCallRequest {
+            //     uid: "".to_string(),
+            //     resource: "".to_string(),
+            // })
             Box::new(WSProxyUnknownRequest {})
         }
     }
 }
 
-fn call_resource(request_id: &str, url: &str) -> Result<ResourceResponse, Box<dyn Error>> {
-    // println!("{:?}", config.get_resource(resource_name));
-    // let body = reqwest::get(config.get_resource(resource_name)).await?.text().await?;
+fn call_resource(request_id: &String, url: &String) -> Result<ResourceResponse, Box<dyn Error>> {
     println!("{}: {}", request_id, url);
-
-    let r = ResourceResponse { status: 200, body: "test".to_string() };
+    let response = reqwest::blocking::get(url)?;
+    let r = ResourceResponse { status: response.status().as_u16(), body: response.text()? };
     Ok(r)
 }
 
-// fn send_answer() {
-//
-// }
-
-fn handle_request(request_id: &str, url: &str) {
-    let response = call_resource(request_id, url).unwrap();
-    println!("{:?}", response);
+fn handle_request(request_id: String, url: String, tx: Sender<OwnedMessage>) {
+    let response = call_resource(&request_id, &url).unwrap();
+    // send response
+    let response_message = ResponseMessage{
+        message_type: "response".to_string(),
+        uid:request_id,
+        body:response.body,
+        status: response.status
+    };
+    let response_json = serde_json::to_string(&response_message).unwrap();
+    println!("{:?}", response_json);
+    match tx.send(OwnedMessage::Text(response_json)) {
+        Ok(()) => (),
+        Err(e) => {
+            println!("Handle Request: {:?}", e);
+        }
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -242,7 +281,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 OwnedMessage::Text(value) => {
                     println!("Receive Loop: {:?}", value);
                     let request = read_ws_message(value);
-                    request.handle(&config);
+                    request.handle(&config, tx_1.clone());
                     return;
                 }
                 _ => {
