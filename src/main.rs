@@ -117,7 +117,12 @@ struct WSProxyPing {}
 
 impl WSProxyRequest for WSProxyPing {
     fn handle(&self, _config: &Config, tx: Sender<OwnedMessage>) {
-        println!("Ping")
+    match tx.send(OwnedMessage::Text("{\"type\": \"pong\"}".to_string())) {
+        Ok(()) => (),
+        Err(e) => {
+            println!("Handle Request: {:?}", e);
+        }
+    }
     }
 }
 
@@ -150,10 +155,6 @@ fn read_ws_message(value: String) -> Box<dyn WSProxyRequest> {
             })
         }
         _ => {
-            // Box::new(WSProxyCallRequest {
-            //     uid: "".to_string(),
-            //     resource: "".to_string(),
-            // })
             Box::new(WSProxyUnknownRequest {})
         }
     }
@@ -285,7 +286,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     return;
                 }
                 _ => {
-                    println!("Receive Loop: {:?}", message);
+                    println!("Receive Loop (unknown message): {:?}", message);
                     return;
                 }
             }
