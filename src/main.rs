@@ -1,6 +1,3 @@
-// fn main() {
-//     println!("Hello, world!");
-// }
 extern crate websocket;
 
 use std::collections::HashMap;
@@ -11,7 +8,7 @@ use std::path::Path;
 use std::sync::mpsc::channel;
 use std::thread;
 use clap::{Arg, Command};
-use serde::{Serialize, Deserialize};
+use serde::{Serialize, Deserialize, de};
 use serde_json::Value;
 
 use websocket::client::ClientBuilder;
@@ -21,6 +18,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use names::Generator;
 use rand::Rng;
+use websocket::header::Headers;
 
 // todo!(use name as key instead of strict naming)
 #[derive(Deserialize, Debug, Clone)]
@@ -29,14 +27,28 @@ struct Resource {
     url: String,
 }
 
+fn default_empty_string() -> String {"".to_string()}
+fn default_false() -> bool {false}
+
+fn deserialize_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let v: bool = de::Deserialize::deserialize(deserializer)?;
+    return Ok(v)
+}
+
 #[derive(Deserialize, Debug)]
 struct Config {
     instance: String,
     target: String,
     resources: Vec<Resource>,
-    // cf_access_enabled: String,
-    // cf_access_key: String,
-    // cf_access_secret: String,
+    #[serde(deserialize_with = "deserialize_bool", default = "default_false")]
+    cf_access_enabled: bool,
+    #[serde(default = "default_empty_string")]
+    cf_access_key: String,
+    #[serde(default = "default_empty_string")]
+    cf_access_secret: String,
 }
 
 #[derive(Serialize, Debug)]
@@ -70,6 +82,9 @@ impl Clone for Config {
             instance: (*self.instance).parse().unwrap(),
             target: (*self.target).parse().unwrap(),
             resources: (*self.resources)[..].to_vec(),
+            cf_access_enabled: self.cf_access_enabled,
+            cf_access_key: (*self.cf_access_key).parse().unwrap(),
+            cf_access_secret: (*self.cf_access_secret).parse().unwrap(),
         }
     }
 }
@@ -218,13 +233,31 @@ fn main() {
 fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     let config = read_config_from_file(config_path).unwrap();
     println!("Instance: {}. Connecting to target: {}", config.instance, config.target);
+    if config.cf_access_enabled {
+        println!("Cloudflare headers config: enabled - {}, key - {}", config.cf_access_enabled, config.cf_access_key);
+    } else {
+        println!("Cloudflare headers not enabled");
+    }
     // println!("{:?}", config.resources);
 
     let instance_name = config.instance.to_owned();
 
-    let client = ClientBuilder::new(config.target.as_str())
-        .unwrap()
-        .connect_insecure();
+    let mut client_builder = ClientBuilder::new(config.target.as_str()).unwrap();
+    if config.cf_access_enabled {
+        let mut headers = Headers::new();
+        headers.set_raw(
+            "CF-Access-Client-Id",
+            vec![config.cf_access_key.as_bytes().to_vec()],
+        );
+        headers.set_raw(
+            "CF-Access-Client-Secret",
+            vec![config.cf_access_secret.as_bytes().to_vec()],
+        );
+        client_builder = client_builder.custom_headers(&headers);
+    }
+
+    let client = client_builder.connect_insecure();
+
     if client.is_err() {
         Err("Unable to connect to the server")?;
     }
