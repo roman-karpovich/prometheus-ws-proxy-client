@@ -101,7 +101,7 @@ impl WSProxyRequest for WSProxyCallRequest {
         let resource_url = resource_map.get(resource_name);
         if resource_url.is_none() {
             println!("unable to find resource with name {}", resource_name);
-            return
+            return;
         }
 
         let resource_url = resource_url.unwrap().to_string();
@@ -117,12 +117,12 @@ struct WSProxyPing {}
 
 impl WSProxyRequest for WSProxyPing {
     fn handle(&self, _config: &Config, tx: Sender<OwnedMessage>) {
-    match tx.send(OwnedMessage::Text("{\"type\": \"pong\"}".to_string())) {
-        Ok(()) => (),
-        Err(e) => {
-            println!("Handle Request: {:?}", e);
+        match tx.send(OwnedMessage::Text("{\"type\": \"pong\"}".to_string())) {
+            Ok(()) => (),
+            Err(e) => {
+                println!("Handle Request: {:?}", e);
+            }
         }
-    }
     }
 }
 
@@ -170,11 +170,11 @@ fn call_resource(request_id: &String, url: &String) -> Result<ResourceResponse, 
 fn handle_request(request_id: String, url: String, tx: Sender<OwnedMessage>) {
     let response = call_resource(&request_id, &url).unwrap();
     // send response
-    let response_message = ResponseMessage{
+    let response_message = ResponseMessage {
         message_type: "response".to_string(),
-        uid:request_id,
-        body:response.body,
-        status: response.status
+        uid: request_id,
+        body: response.body,
+        status: response.status,
     };
     let response_json = serde_json::to_string(&response_message).unwrap();
     println!("{:?}", response_json);
@@ -275,7 +275,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         Ok(()) => (),
                         Err(e) => {
                             println!("Receive Loop: {:?}", e);
-                            return;
+                            continue;
                         }
                     }
                 }
@@ -283,7 +283,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     println!("Receive Loop: {:?}", value);
                     let request = read_ws_message(value);
                     request.handle(&config, tx_1.clone());
-                    return;
+                    continue;
                 }
                 _ => {
                     println!("Receive Loop (unknown message): {:?}", message);
