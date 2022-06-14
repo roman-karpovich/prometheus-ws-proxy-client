@@ -3,12 +3,10 @@
 // }
 extern crate websocket;
 
-use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufReader, stdin};
-use std::net::TcpStream;
+use std::io::BufReader;
 use std::path::Path;
 use std::sync::mpsc::channel;
 use std::thread;
@@ -19,10 +17,10 @@ use serde_json::Value;
 use websocket::client::ClientBuilder;
 use websocket::{Message, OwnedMessage};
 use std::sync::mpsc::Sender;
-use websocket::sender::Writer;
-// use websocket::{Message, OwnedMessage};
-
-// const CONNECTION: &'static str = "ws://127.0.0.1:2794";
+use std::thread::sleep;
+use std::time::Duration;
+use names::Generator;
+use rand::Rng;
 
 // todo!(use name as key instead of strict naming)
 #[derive(Deserialize, Debug, Clone)]
@@ -62,14 +60,8 @@ impl Config {
         for resource in &self.resources[..] {
             result.insert(&resource.name, &resource.url);
         }
-        // make result immutable
-        // let result = result;
         result
     }
-
-    // fn get_resource(&self, name: &str) -> Option<&Resource> {
-    //     self.resources.iter().find(|&r| r.name == name)
-    // }
 }
 
 impl Clone for Config {
@@ -96,7 +88,7 @@ impl WSProxyRequest for WSProxyCallRequest {
     fn handle(&self, config: &Config, tx: Sender<OwnedMessage>) {
         let uid = self.uid.clone();
         let resource_name = &self.resource;
-        println!("Handling request {}: {}", uid, resource_name);
+        // println!("Handling request {}: {}", uid, resource_name);
         let resource_map = config.get_resource_map();
         let resource_url = resource_map.get(resource_name);
         if resource_url.is_none() {
@@ -106,7 +98,7 @@ impl WSProxyRequest for WSProxyCallRequest {
 
         let resource_url = resource_url.unwrap().to_string();
 
-        println!("resource_url: {}", resource_url);
+        // println!("resource_url: {}", resource_url);
 
         thread::spawn(|| handle_request(uid, resource_url, tx));
     }
@@ -129,7 +121,7 @@ impl WSProxyRequest for WSProxyPing {
 struct WSProxyUnknownRequest {}
 
 impl WSProxyRequest for WSProxyUnknownRequest {
-    fn handle(&self, _config: &Config, tx: Sender<OwnedMessage>) {
+    fn handle(&self, _config: &Config, _tx: Sender<OwnedMessage>) {
         println!("Unknown request")
     }
 }
@@ -160,15 +152,15 @@ fn read_ws_message(value: String) -> Box<dyn WSProxyRequest> {
     }
 }
 
-fn call_resource(request_id: &String, url: &String) -> Result<ResourceResponse, Box<dyn Error>> {
-    println!("{}: {}", request_id, url);
+fn call_resource(url: &String) -> Result<ResourceResponse, Box<dyn Error>> {
+    // println!("{}: {}", request_id, url);
     let response = reqwest::blocking::get(url)?;
     let r = ResourceResponse { status: response.status().as_u16(), body: response.text()? };
     Ok(r)
 }
 
 fn handle_request(request_id: String, url: String, tx: Sender<OwnedMessage>) {
-    let response = call_resource(&request_id, &url).unwrap();
+    let response = call_resource(&url).unwrap();
     // send response
     let response_message = ResponseMessage {
         message_type: "response".to_string(),
@@ -177,7 +169,7 @@ fn handle_request(request_id: String, url: String, tx: Sender<OwnedMessage>) {
         status: response.status,
     };
     let response_json = serde_json::to_string(&response_message).unwrap();
-    println!("{:?}", response_json);
+    // println!("{:?}", response_json);
     match tx.send(OwnedMessage::Text(response_json)) {
         Ok(()) => (),
         Err(e) => {
@@ -186,7 +178,7 @@ fn handle_request(request_id: String, url: String, tx: Sender<OwnedMessage>) {
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
     let matches = Command::new("Prometheus websocket proxy")
         .version("2.0.0")
         .author("Roman Karpovich <fpm.th13f@gmail.com>")
@@ -196,21 +188,47 @@ fn main() -> Result<(), Box<dyn Error>> {
         .get_matches();
 
     let config_path = matches.value_of("config").unwrap_or("client_config.json");
-    println!("The file passed is: {}", config_path);
+    println!("Using config {}", config_path);
+
+    let connections_number: usize = matches.value_of_t("parallel").unwrap_or(3);
+    println!("Run {} workers", connections_number);
+
+    let mut generator = Generator::default();
+    let mut threads: Vec<_> = Vec::new();
+
+    for _i in 0..connections_number {
+        let worker_name = generator.next().unwrap();
+        let local_config_path = config_path.clone().to_string();
+
+        threads.push(thread::spawn(move || {
+            run_worker(worker_name.as_str(), local_config_path.as_str());
+        }));
+    }
+
+    for handle in threads {
+        match handle.join() {
+            Ok(()) => (),
+            Err(e) => {
+                println!("Main Loop: {:?}", e);
+            }
+        }
+    }
+}
+
+fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     let config = read_config_from_file(config_path).unwrap();
-
-    println!("instance: {} target: {}", config.instance, config.target);
-    println!("{:?}", config.resources);
-
-    println!("Connecting to {}", config.target);
+    println!("Instance: {}. Connecting to target: {}", config.instance, config.target);
+    // println!("{:?}", config.resources);
 
     let instance_name = config.instance.to_owned();
 
     let client = ClientBuilder::new(config.target.as_str())
         .unwrap()
-        // .add_protocol("rust-websocket")
-        .connect_insecure()
-        .unwrap();
+        .connect_insecure();
+    if client.is_err() {
+        Err("Unable to connect to the server")?;
+    }
+    let client = client.unwrap();
 
     println!("Successfully connected");
 
@@ -280,7 +298,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
                 OwnedMessage::Text(value) => {
-                    println!("Receive Loop: {:?}", value);
+                    // println!("Receive Loop: {:?}", value);
                     let request = read_ws_message(value);
                     request.handle(&config, tx_1.clone());
                     continue;
@@ -307,40 +325,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     println!("Successfully registered");
 
-    // loop {
-    // 	let mut input = String::new();
-    //
-    // 	stdin().read_line(&mut input).unwrap();
-    //
-    // 	let trimmed = input.trim();
-    //
-    // 	let message = match trimmed {
-    // 		"/close" => {
-    // 			// Close the connection
-    // 			let _ = tx.send(OwnedMessage::Close(None));
-    // 			break;
-    // 		}
-    // 		// Send a ping
-    // 		"/ping" => OwnedMessage::Ping(b"PING".to_vec()),
-    // 		// Otherwise, just send text
-    // 		_ => OwnedMessage::Text(trimmed.to_string()),
-    // 	};
-    //
-    // 	match tx.send(message) {
-    // 		Ok(()) => (),
-    // 		Err(e) => {
-    // 			println!("Main Loop: {:?}", e);
-    // 			break;
-    // 		}
-    // 	}
-    // }
-
-    // We're exiting
-
     let _ = send_loop.join();
     let _ = receive_loop.join();
 
     println!("Exited");
 
     Ok(())
+}
+
+fn run_worker(name: &str, config_path: &str) {
+    println!("Worker {} starting", name);
+    loop {
+        match connect_to_server(config_path) {
+            Ok(()) => (),
+            Err(e) => {
+                println!("Worker {} exited: {:?}", name, e);
+            }
+        }
+        let mut rng = rand::thread_rng();
+        sleep(Duration::from_secs(1 + rng.gen_range(0..5)));
+    }
 }
