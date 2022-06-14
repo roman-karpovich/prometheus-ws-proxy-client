@@ -20,7 +20,7 @@ impl WSProxyRequest for WSProxyCallRequest {
         let uid = self.uid.clone();
         let resource_name = &self.resource;
         // println!("Handling request {}: {}", uid, resource_name);
-        let resource_map = config.get_resource_map();
+        let resource_map = &config.resources;
         let resource_url = resource_map.get(resource_name);
         if resource_url.is_none() {
             println!("unable to find resource with name {}", resource_name);

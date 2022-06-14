@@ -1,7 +1,10 @@
 {
   "instance": "foo",
   "target": "http://localhost:8080/proxy/ws/",
-  "resources": [{"name": "node", "url": "https://localhost:9100"}, {"name": "example", "url": "https://example.com"}],
+  "resources": {
+    "node": "https://localhost:9100",
+    "example": "https://example.com"
+  },
   "cf_access_enabled": true,
   "cf_access_key": "test cf access key",
   "cf_access_secret": "test cf access secret"

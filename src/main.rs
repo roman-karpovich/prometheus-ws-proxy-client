@@ -29,7 +29,7 @@ fn main() {
     println!("Run {} workers", connections_number);
 
     let mut generator = Generator::default();
-    let mut threads: Vec<_> = Vec::new();
+    let mut threads = Vec::new();
 
     for _i in 0..connections_number {
         let worker_name = generator.next().unwrap();
