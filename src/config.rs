@@ -1,18 +1,21 @@
+use serde::{de, Deserialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use serde::{de, Deserialize};
 
+fn default_empty_string() -> String {
+    "".to_string()
+}
 
-fn default_empty_string() -> String { "".to_string() }
-
-fn default_false() -> bool { false }
+fn default_false() -> bool {
+    false
+}
 
 fn deserialize_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
-    where
-        D: de::Deserializer<'de>,
+where
+    D: de::Deserializer<'de>,
 {
     let v: bool = de::Deserialize::deserialize(deserializer)?;
     return Ok(v);

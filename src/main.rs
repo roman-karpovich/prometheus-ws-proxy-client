@@ -1,18 +1,14 @@
 extern crate websocket;
 
-use std::thread;
 use clap::{Arg, Command};
 use log::{error, info};
-
-use websocket::{Message, OwnedMessage};
 use names::Generator;
-use websocket::header::Headers;
-use ws_response::{ResourceResponse, ResponseMessage};
+use std::thread;
 
-mod ws_response;
-mod ws_request;
 mod config;
 mod worker;
+mod ws_request;
+mod ws_response;
 
 fn main() {
     env_logger::init();
@@ -22,7 +18,12 @@ fn main() {
         .author("Roman Karpovich <fpm.th13f@gmail.com>")
         .about("Connects to websocket server to call local resources")
         .arg(Arg::new("config").help("path to config").takes_value(true))
-        .arg(Arg::new("parallel").long("parallel").help("number of connections to use").takes_value(true))
+        .arg(
+            Arg::new("parallel")
+                .long("parallel")
+                .help("number of connections to use")
+                .takes_value(true),
+        )
         .get_matches();
 
     let config_path = matches.value_of("config").unwrap_or("client_config.json");

@@ -1,10 +1,10 @@
-use std::sync::mpsc::Sender;
-use std::thread;
-use log::{debug, error, warn};
 use crate::config::Config;
-use crate::OwnedMessage;
+use log::{debug, error, warn};
 use serde::Deserialize;
 use serde_json::Value;
+use std::sync::mpsc::Sender;
+use std::thread;
+use websocket::OwnedMessage;
 
 pub trait WSProxyRequest {
     fn handle(&self, config: &Config, tx: Sender<OwnedMessage>);
@@ -62,17 +62,11 @@ pub fn read_ws_message(value: String) -> Box<dyn WSProxyRequest> {
     let msg: Value = serde_json::from_str(value.as_str()).unwrap();
     let msg_type = msg["type"].as_str().unwrap();
     match msg_type {
-        "ping" => {
-            Box::new(WSProxyPing {})
-        }
-        "request" => {
-            Box::new(WSProxyCallRequest {
-                uid: msg["uid"].as_str().unwrap().to_string(),
-                resource: msg["resource"].as_str().unwrap().to_string(),
-            })
-        }
-        _ => {
-            Box::new(WSProxyUnknownRequest {})
-        }
+        "ping" => Box::new(WSProxyPing {}),
+        "request" => Box::new(WSProxyCallRequest {
+            uid: msg["uid"].as_str().unwrap().to_string(),
+            resource: msg["resource"].as_str().unwrap().to_string(),
+        }),
+        _ => Box::new(WSProxyUnknownRequest {}),
     }
 }

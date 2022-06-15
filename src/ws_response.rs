@@ -1,13 +1,7 @@
 use serde::Serialize;
 
-#[derive(Serialize, Debug)]
-pub struct ResourceResponse {
-    pub status: u16,
-    pub body: String,
-}
-
 #[derive(Serialize)]
-pub struct ResponseMessage {
+pub struct WSResponseMessage {
     #[serde(rename(serialize = "type"))]
     pub message_type: String,
     pub uid: String,

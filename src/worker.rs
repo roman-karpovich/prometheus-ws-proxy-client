@@ -1,25 +1,37 @@
-use std::error::Error;
-use std::sync::mpsc::{channel, Sender};
-use std::thread::sleep;
-use std::time::Duration;
-use websocket::ClientBuilder;
-use std::thread;
+use crate::config::Config;
+use crate::ws_request;
+use crate::ws_response::WSResponseMessage;
 use log::{debug, error, info, warn};
 use rand::Rng;
-use crate::{Headers, Message, OwnedMessage, ResourceResponse, ResponseMessage, ws_request};
-use crate::config::Config;
+use serde::Serialize;
+use std::error::Error;
+use std::sync::mpsc::{channel, Sender};
+use std::thread;
+use std::thread::sleep;
+use std::time::Duration;
+use websocket::header::Headers;
+use websocket::{ClientBuilder, Message, OwnedMessage};
+
+#[derive(Serialize, Debug)]
+pub struct ResourceResponse {
+    status: u16,
+    body: String,
+}
 
 fn call_resource(url: &String) -> Result<ResourceResponse, Box<dyn Error>> {
     debug!("{}", url);
     let response = reqwest::blocking::get(url)?;
-    let r = ResourceResponse { status: response.status().as_u16(), body: response.text()? };
+    let r = ResourceResponse {
+        status: response.status().as_u16(),
+        body: response.text()?,
+    };
     Ok(r)
 }
 
 pub fn handle_request(request_id: String, url: String, tx: Sender<OwnedMessage>) {
     let response = call_resource(&url).unwrap();
     // send response
-    let response_message = ResponseMessage {
+    let response_message = WSResponseMessage {
         message_type: "response".to_string(),
         uid: request_id,
         body: response.body,
@@ -37,9 +49,15 @@ pub fn handle_request(request_id: String, url: String, tx: Sender<OwnedMessage>)
 
 fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     let config = Config::from_file(config_path).unwrap();
-    info!("Instance: {}. Connecting to target: {}", config.instance, config.target);
+    info!(
+        "Instance: {}. Connecting to target: {}",
+        config.instance, config.target
+    );
     if config.cf_access_enabled {
-        debug!("Cloudflare headers config: enabled - {}, key - {}", config.cf_access_enabled, config.cf_access_key);
+        debug!(
+            "Cloudflare headers config: enabled - {}, key - {}",
+            config.cf_access_enabled, config.cf_access_key
+        );
     } else {
         debug!("Cloudflare headers not enabled");
     }
@@ -150,11 +168,14 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     });
 
     // register
-    let register_message = format!(r#"
+    let register_message = format!(
+        r#"
 	{{
 		"type": "register",
 		"instance": "{}"
-	}}"#, instance_name);
+	}}"#,
+        instance_name
+    );
     match tx.send(OwnedMessage::Text(register_message)) {
         Ok(()) => (),
         Err(e) => {
