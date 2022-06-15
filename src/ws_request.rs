@@ -1,5 +1,6 @@
 use std::sync::mpsc::Sender;
 use std::thread;
+use log::{debug, error, warn};
 use crate::config::Config;
 use crate::OwnedMessage;
 use serde::Deserialize;
@@ -19,17 +20,17 @@ impl WSProxyRequest for WSProxyCallRequest {
     fn handle(&self, config: &Config, tx: Sender<OwnedMessage>) {
         let uid = self.uid.clone();
         let resource_name = &self.resource;
-        // println!("Handling request {}: {}", uid, resource_name);
+        debug!("Handling request {}: {}", uid, resource_name);
         let resource_map = &config.resources;
         let resource_url = resource_map.get(resource_name);
         if resource_url.is_none() {
-            println!("unable to find resource with name {}", resource_name);
+            warn!("unable to find resource with name {}", resource_name);
             return;
         }
 
         let resource_url = resource_url.unwrap().to_string();
 
-        // println!("resource_url: {}", resource_url);
+        debug!("resource_url: {}", resource_url);
 
         thread::spawn(|| crate::worker::handle_request(uid, resource_url, tx));
     }
@@ -43,7 +44,7 @@ impl WSProxyRequest for WSProxyPing {
         match tx.send(OwnedMessage::Text("{\"type\": \"pong\"}".to_string())) {
             Ok(()) => (),
             Err(e) => {
-                println!("Handle Request: {:?}", e);
+                error!("Handle Request: {:?}", e);
             }
         }
     }
@@ -53,7 +54,7 @@ pub struct WSProxyUnknownRequest {}
 
 impl WSProxyRequest for WSProxyUnknownRequest {
     fn handle(&self, _config: &Config, _tx: Sender<OwnedMessage>) {
-        println!("Unknown request")
+        warn!("Unknown request")
     }
 }
 

@@ -4,12 +4,13 @@ use std::thread::sleep;
 use std::time::Duration;
 use websocket::ClientBuilder;
 use std::thread;
+use log::{debug, error, info, warn};
 use rand::Rng;
 use crate::{Headers, Message, OwnedMessage, ResourceResponse, ResponseMessage, ws_request};
 use crate::config::Config;
 
 fn call_resource(url: &String) -> Result<ResourceResponse, Box<dyn Error>> {
-    // println!("{}: {}", request_id, url);
+    debug!("{}", url);
     let response = reqwest::blocking::get(url)?;
     let r = ResourceResponse { status: response.status().as_u16(), body: response.text()? };
     Ok(r)
@@ -25,24 +26,24 @@ pub fn handle_request(request_id: String, url: String, tx: Sender<OwnedMessage>)
         status: response.status,
     };
     let response_json = serde_json::to_string(&response_message).unwrap();
-    // println!("{:?}", response_json);
+    debug!("{:?}", response_json);
     match tx.send(OwnedMessage::Text(response_json)) {
         Ok(()) => (),
         Err(e) => {
-            println!("Handle Request: {:?}", e);
+            error!("Handle Request: {:?}", e);
         }
     }
 }
 
 fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     let config = Config::from_file(config_path).unwrap();
-    println!("Instance: {}. Connecting to target: {}", config.instance, config.target);
+    info!("Instance: {}. Connecting to target: {}", config.instance, config.target);
     if config.cf_access_enabled {
-        println!("Cloudflare headers config: enabled - {}, key - {}", config.cf_access_enabled, config.cf_access_key);
+        debug!("Cloudflare headers config: enabled - {}, key - {}", config.cf_access_enabled, config.cf_access_key);
     } else {
-        println!("Cloudflare headers not enabled");
+        debug!("Cloudflare headers not enabled");
     }
-    // println!("{:?}", config.resources);
+    debug!("resources configured: {:?}", config.resources);
 
     let instance_name = config.instance.to_owned();
 
@@ -67,7 +68,7 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     }
     let client = client.unwrap();
 
-    println!("Successfully connected");
+    info!("Successfully connected");
 
     let (mut receiver, mut sender) = client.split().unwrap();
 
@@ -81,7 +82,7 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
             let message = match rx.recv() {
                 Ok(m) => m,
                 Err(e) => {
-                    println!("Send Loop: {:?}", e);
+                    error!("Send Loop: {:?}", e);
                     return;
                 }
             };
@@ -97,7 +98,7 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
             match sender.send_message(&message) {
                 Ok(()) => (),
                 Err(e) => {
-                    println!("Send Loop: {:?}", e);
+                    error!("Send Loop: {:?}", e);
                     let _ = sender.send_message(&Message::close());
                     return;
                 }
@@ -111,37 +112,37 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
             let message = match message {
                 Ok(m) => m,
                 Err(e) => {
-                    println!("Receive Loop: {:?}", e);
+                    debug!("Receive Loop: {:?}", e);
                     let _ = tx_1.send(OwnedMessage::Close(None));
                     return;
                 }
             };
             match message {
                 OwnedMessage::Close(_) => {
-                    println!("Close received");
+                    debug!("Close received");
                     // Got a close message, so send a close message and return
                     let _ = tx_1.send(OwnedMessage::Close(None));
                     return;
                 }
                 OwnedMessage::Ping(data) => {
-                    println!("Ping received");
+                    debug!("Ping received");
                     match tx_1.send(OwnedMessage::Pong(data)) {
                         // Send a pong in response
                         Ok(()) => (),
                         Err(e) => {
-                            println!("Receive Loop: {:?}", e);
+                            error!("Receive Loop: {:?}", e);
                             continue;
                         }
                     }
                 }
                 OwnedMessage::Text(value) => {
-                    // println!("Receive Loop: {:?}", value);
+                    debug!("Receive Loop: {:?}", value);
                     let request = ws_request::read_ws_message(value);
                     request.handle(&config, tx_1.clone());
                     continue;
                 }
                 _ => {
-                    println!("Receive Loop (unknown message): {:?}", message);
+                    warn!("Receive Loop (unknown message): {:?}", message);
                     return;
                 }
             }
@@ -157,26 +158,26 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     match tx.send(OwnedMessage::Text(register_message)) {
         Ok(()) => (),
         Err(e) => {
-            println!("Main Loop: {:?}", e);
+            error!("Main Loop: {:?}", e);
         }
     }
-    println!("Successfully registered");
+    info!("Successfully registered");
 
     let _ = send_loop.join();
     let _ = receive_loop.join();
 
-    println!("Exited");
+    info!("Exited");
 
     Ok(())
 }
 
 pub fn run_worker(name: &str, config_path: &str) {
-    println!("Worker {} starting", name);
+    info!("Worker {} starting", name);
     loop {
         match connect_to_server(config_path) {
             Ok(()) => (),
             Err(e) => {
-                println!("Worker {} exited: {:?}", name, e);
+                error!("Worker {} exited: {:?}", name, e);
             }
         }
         let mut rng = rand::thread_rng();

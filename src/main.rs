@@ -2,6 +2,7 @@ extern crate websocket;
 
 use std::thread;
 use clap::{Arg, Command};
+use log::{error, info};
 
 use websocket::{Message, OwnedMessage};
 use names::Generator;
@@ -14,6 +15,8 @@ mod config;
 mod worker;
 
 fn main() {
+    env_logger::init();
+
     let matches = Command::new("Prometheus websocket proxy")
         .version("2.0.0")
         .author("Roman Karpovich <fpm.th13f@gmail.com>")
@@ -23,10 +26,10 @@ fn main() {
         .get_matches();
 
     let config_path = matches.value_of("config").unwrap_or("client_config.json");
-    println!("Using config {}", config_path);
+    info!("Using config {}", config_path);
 
     let connections_number: usize = matches.value_of_t("parallel").unwrap_or(3);
-    println!("Run {} workers", connections_number);
+    info!("Run {} workers", connections_number);
 
     let mut generator = Generator::default();
     let mut threads = Vec::new();
@@ -44,7 +47,7 @@ fn main() {
         match handle.join() {
             Ok(()) => (),
             Err(e) => {
-                println!("Main Loop: {:?}", e);
+                error!("Main Loop: {:?}", e);
             }
         }
     }
