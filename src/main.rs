@@ -18,7 +18,7 @@ fn main() {
     env_logger::init();
 
     let matches = Command::new("Prometheus websocket proxy")
-        .version("2.0.0")
+        .version("2.0.1")
         .author("Roman Karpovich <fpm.th13f@gmail.com>")
         .about("Connects to websocket server to call local resources")
         .arg(Arg::new("config").help("path to config").takes_value(true))
