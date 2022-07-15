@@ -51,7 +51,7 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     let config = Config::from_file(config_path).unwrap();
     info!(
         "Instance: {}. Connecting to target: {}",
-        config.instance, config.target
+        config.get_instance_name(), config.target
     );
     if config.cf_access_enabled {
         debug!(
@@ -63,7 +63,7 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     }
     debug!("resources configured: {:?}", config.resources);
 
-    let instance_name = config.instance.to_owned();
+    let instance_name = config.get_instance_name().to_owned();
 
     let mut client_builder = ClientBuilder::new(config.target.as_str()).unwrap();
     if config.cf_access_enabled {

@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use crate::utils::get_ec2_instance_name;
 
 fn default_empty_string() -> String {
     "".to_string()
@@ -18,12 +19,12 @@ where
     D: de::Deserializer<'de>,
 {
     let v: bool = de::Deserialize::deserialize(deserializer)?;
-    return Ok(v);
+    Ok(v)
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Config {
-    pub instance: String,
+    instance: String,
     pub target: String,
     pub resources: HashMap<String, String>,
     #[serde(deserialize_with = "deserialize_bool", default = "default_false")]
@@ -38,7 +39,14 @@ impl Config {
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn Error>> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
-        let c = serde_json::from_reader(reader)?;
+        let mut c: Config = serde_json::from_reader(reader)?;
+        if c.instance == "ec2" {
+            c.instance = get_ec2_instance_name();
+        }
         Ok(c)
+    }
+
+    pub fn get_instance_name(&self) -> &String {
+        &self.instance
     }
 }
