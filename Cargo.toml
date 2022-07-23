@@ -6,14 +6,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "3.1", features = ["derive"]}
+clap = { version = "3.2", features = ["derive"]}
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 reqwest = { version = "0.11", features = ["blocking", "json"] }
-names = { version = "0.13.0", default-features = false }
-rand = "0.8.4"
-log = "0.4.0"
-env_logger = "0.8.4"
+names = { version = "0.14", default-features = false }
+rand = "0.8"
+log = "0.4"
+env_logger = "0.9"
+
+[dev-dependencies]
+mockito = "0.31"
 
 [dependencies.websocket]
 git = "https://github.com/websockets-rs/rust-websocket.git"

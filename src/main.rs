@@ -10,6 +10,7 @@ mod worker;
 mod ws_request;
 mod ws_response;
 mod utils;
+mod tests;
 
 fn main() {
     env_logger::init();
