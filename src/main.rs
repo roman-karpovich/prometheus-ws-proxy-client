@@ -1,7 +1,7 @@
 extern crate websocket;
 
-use clap::{Arg, Command};
-use log::{error, info};
+use clap::{Arg, arg, ArgAction, Command, value_parser};
+use log::{error, info, warn};
 use names::Generator;
 use std::thread;
 
@@ -19,19 +19,21 @@ fn main() {
         .version("2.0.1")
         .author("Roman Karpovich <fpm.th13f@gmail.com>")
         .about("Connects to websocket server to call local resources")
-        .arg(Arg::new("config").help("path to config").takes_value(true))
-        .arg(
-            Arg::new("parallel")
-                .long("parallel")
-                .help("number of connections to use")
-                .takes_value(true),
+        .args(&[
+            arg!([config] "path to config")
+                .default_value("client_config.json"),
+            arg!(-p --parallel ... "number of connections to use")
+                .action(ArgAction::Set)
+                .value_parser(value_parser!(u16))
+                .default_value("3"),
+        ]
         )
         .get_matches();
 
-    let config_path = matches.value_of("config").unwrap_or("client_config.json");
+    let config_path = matches.get_one::<String>("config").unwrap();
     info!("Using config {}", config_path);
 
-    let connections_number: usize = matches.value_of_t("parallel").unwrap_or(3);
+    let connections_number = *matches.get_one::<u16>("parallel").unwrap();
     info!("Run {} workers", connections_number);
 
     let mut generator = Generator::default();
