@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::ws_request;
-use crate::ws_response::WSResponseMessage;
+use crate::ws_response::{WSRegisterMessage, WSResponseMessage};
 use log::{debug, error, info, warn};
 use rand::Rng;
 use serde::Serialize;
@@ -47,7 +47,7 @@ pub fn handle_request(request_id: String, url: String, tx: Sender<OwnedMessage>)
     }
 }
 
-fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
+fn connect_to_server(worker_name: String, config_path: &str) -> Result<(), Box<dyn Error>> {
     let config = Config::from_file(config_path).unwrap();
     info!(
         "Instance: {}. Connecting to target: {}",
@@ -124,6 +124,13 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
         }
     });
 
+    // let receive_loop = thread::spawn(move || {
+    //     let static_worker = local_worker.clone().to_string();
+    //     // let local_worker = local_worker.clone().to_owned();
+    //     println!("{}", static_worker);
+    // });
+
+    let local_worker = worker_name.clone();
     let receive_loop = thread::spawn(move || {
         // Receive loop
         for message in receiver.incoming_messages() {
@@ -156,7 +163,7 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
                 OwnedMessage::Text(value) => {
                     debug!("Receive Loop: {:?}", value);
                     let request = ws_request::read_ws_message(value);
-                    request.handle(&config, tx_1.clone());
+                    request.handle(local_worker.clone(), &config, tx_1.clone());
                     continue;
                 }
                 _ => {
@@ -168,15 +175,14 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     });
 
     // register
-    let register_message = format!(
-        r#"
-	{{
-		"type": "register",
-		"instance": "{}"
-	}}"#,
-        instance_name
-    );
-    match tx.send(OwnedMessage::Text(register_message)) {
+    let register_message = WSRegisterMessage {
+        message_type: "register".to_string(),
+        instance: instance_name,
+        worker: worker_name.clone(),
+        version: 2,
+    };
+    let register_json = serde_json::to_string(&register_message).unwrap();
+    match tx.send(OwnedMessage::Text(register_json)) {
         Ok(()) => (),
         Err(e) => {
             error!("Main Loop: {:?}", e);
@@ -192,13 +198,13 @@ fn connect_to_server(config_path: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn run_worker(name: &str, config_path: &str) {
+pub fn run_worker(name: String, config_path: &str) {
     info!("Worker {} starting", name);
     loop {
-        match connect_to_server(config_path) {
+        match connect_to_server(name.clone(), config_path) {
             Ok(()) => (),
             Err(e) => {
-                error!("Worker {} exited: {:?}", name, e);
+                error!("Worker {} exited: {:?}", name.clone(), e);
             }
         }
         let mut rng = rand::thread_rng();

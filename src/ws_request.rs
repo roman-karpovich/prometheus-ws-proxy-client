@@ -5,9 +5,33 @@ use serde_json::Value;
 use std::sync::mpsc::Sender;
 use std::thread;
 use websocket::OwnedMessage;
+use crate::ws_response::WSReadyMessage;
 
 pub trait WSProxyRequest {
-    fn handle(&self, config: &Config, tx: Sender<OwnedMessage>);
+    fn handle(&self, worker: String, config: &Config, tx: Sender<OwnedMessage>);
+}
+
+#[derive(Deserialize, Debug)]
+pub struct WSProxyReadyRequest {
+    pub uid: String,
+}
+
+impl WSProxyRequest for WSProxyReadyRequest {
+    fn handle(&self, worker: String, _config: &Config, tx: Sender<OwnedMessage>) {
+        let response_message = WSReadyMessage {
+            message_type: "ready".to_string(),
+            uid: self.uid.clone(),
+            worker,
+        };
+        let response_json = serde_json::to_string(&response_message).unwrap();
+        debug!("{:?}", response_json);
+        match tx.send(OwnedMessage::Text(response_json)) {
+            Ok(()) => (),
+            Err(e) => {
+                error!("Handle Request: {:?}", e);
+            }
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
@@ -17,7 +41,7 @@ pub struct WSProxyCallRequest {
 }
 
 impl WSProxyRequest for WSProxyCallRequest {
-    fn handle(&self, config: &Config, tx: Sender<OwnedMessage>) {
+    fn handle(&self, _worker: String, config: &Config, tx: Sender<OwnedMessage>) {
         let uid = self.uid.clone();
         let resource_name = &self.resource;
         debug!("Handling request {}: {}", uid, resource_name);
@@ -40,7 +64,7 @@ impl WSProxyRequest for WSProxyCallRequest {
 pub struct WSProxyPing {}
 
 impl WSProxyRequest for WSProxyPing {
-    fn handle(&self, _config: &Config, tx: Sender<OwnedMessage>) {
+    fn handle(&self, _worker: String, _config: &Config, tx: Sender<OwnedMessage>) {
         match tx.send(OwnedMessage::Text("{\"type\": \"pong\"}".to_string())) {
             Ok(()) => (),
             Err(e) => {
@@ -53,7 +77,7 @@ impl WSProxyRequest for WSProxyPing {
 pub struct WSProxyUnknownRequest {}
 
 impl WSProxyRequest for WSProxyUnknownRequest {
-    fn handle(&self, _config: &Config, _tx: Sender<OwnedMessage>) {
+    fn handle(&self, _worker: String, _config: &Config, _tx: Sender<OwnedMessage>) {
         warn!("Unknown request")
     }
 }
@@ -66,6 +90,9 @@ pub fn read_ws_message(value: String) -> Box<dyn WSProxyRequest> {
         "request" => Box::new(WSProxyCallRequest {
             uid: msg["uid"].as_str().unwrap().to_string(),
             resource: msg["resource"].as_str().unwrap().to_string(),
+        }),
+        "ready" => Box::new(WSProxyReadyRequest {
+            uid: msg["uid"].as_str().unwrap().to_string(),
         }),
         _ => Box::new(WSProxyUnknownRequest {}),
     }

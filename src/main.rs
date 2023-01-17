@@ -44,7 +44,7 @@ fn main() {
         let local_config_path = config_path.clone().to_string();
 
         threads.push(thread::spawn(move || {
-            worker::run_worker(worker_name.as_str(), local_config_path.as_str());
+            worker::run_worker(worker_name.clone(), local_config_path.as_str());
         }));
     }
 
