@@ -178,8 +178,8 @@ fn connect_to_server(worker_name: String, config_path: &str) -> Result<(), Box<d
     let register_message = WSRegisterMessage {
         message_type: "register".to_string(),
         instance: instance_name,
-        worker: worker_name.clone(),
-        version: 2,
+        // worker: worker_name.clone(),
+        // version: 2,
     };
     let register_json = serde_json::to_string(&register_message).unwrap();
     match tx.send(OwnedMessage::Text(register_json)) {
