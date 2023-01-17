@@ -44,26 +44,6 @@ impl Config {
         Ok(c)
     }
 
-    pub fn new(
-        instance: String,
-        target: String,
-        resources: HashMap<String, String>,
-        cf_access_enabled: bool,
-        cf_access_key: String,
-        cf_access_secret: String,
-    ) -> Config {
-        let mut c = Config {
-            instance: "".to_string(),
-            target,
-            resources,
-            cf_access_enabled,
-            cf_access_key,
-            cf_access_secret,
-        };
-        c.set_instance_name(instance);
-        c
-    }
-
     pub fn get_instance_name(&self) -> &String {
         &self.instance
     }

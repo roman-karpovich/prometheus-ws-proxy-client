@@ -1,7 +1,7 @@
 extern crate websocket;
 
-use clap::{Arg, arg, ArgAction, Command, value_parser};
-use log::{error, info, warn};
+use clap::{arg, ArgAction, Command, value_parser};
+use log::{error, info};
 use names::Generator;
 use std::thread;
 
