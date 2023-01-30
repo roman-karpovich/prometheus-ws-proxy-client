@@ -1,16 +1,16 @@
 extern crate websocket;
 
-use clap::{arg, ArgAction, Command, value_parser};
+use clap::{arg, value_parser, ArgAction, Command};
 use log::{error, info};
 use names::Generator;
 use std::thread;
 
 mod config;
+mod tests;
+mod utils;
 mod worker;
 mod ws_request;
 mod ws_response;
-mod utils;
-mod tests;
 
 fn main() {
     env_logger::init();
@@ -20,18 +20,23 @@ fn main() {
         .author("Roman Karpovich <fpm.th13f@gmail.com>")
         .about("Connects to websocket server to call local resources")
         .args(&[
-            arg!([config] "path to config")
-                .default_value("client_config.json"),
+            arg!([config] "path to config").default_value("client_config.json"),
             arg!(-p --parallel ... "number of connections to use")
                 .action(ArgAction::Set)
                 .value_parser(value_parser!(u16))
                 .default_value("3"),
-        ]
-        )
+            arg!(-r --protocol ... "protocol version")
+                .action(ArgAction::Set)
+                .value_parser(value_parser!(u16))
+                .default_value("2"),
+        ])
         .get_matches();
 
     let config_path = matches.get_one::<String>("config").unwrap();
     info!("Using config {}", config_path);
+
+    let protocol_version = *matches.get_one::<u16>("protocol").unwrap();
+    info!("Protocol version {}", protocol_version);
 
     let connections_number = *matches.get_one::<u16>("parallel").unwrap();
     info!("Run {} workers", connections_number);
@@ -44,7 +49,11 @@ fn main() {
         let local_config_path = config_path.clone().to_string();
 
         threads.push(thread::spawn(move || {
-            worker::run_worker(worker_name.clone(), local_config_path.as_str());
+            worker::run_worker(
+                worker_name.clone(),
+                local_config_path.as_str(),
+                protocol_version,
+            );
         }));
     }
 

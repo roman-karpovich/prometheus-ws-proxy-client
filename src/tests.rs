@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use mockito::mock;
     use crate::config::Config;
+    use mockito::mock;
     use std::collections::HashMap;
 
     fn get_example_resources() -> HashMap<String, String> {
@@ -16,9 +16,12 @@ mod tests {
     #[test]
     fn test_static_instance_name() {
         let c = Config::new(
-            "test".to_string(), EXAMPLE_TARGET.to_string(),
+            "test".to_string(),
+            EXAMPLE_TARGET.to_string(),
             get_example_resources(),
-            false, "".to_string(), "".to_string(),
+            false,
+            "".to_string(),
+            "".to_string(),
         );
         assert_eq!(c.get_instance_name(), "test");
     }
@@ -31,9 +34,12 @@ mod tests {
             .create();
 
         Config::new(
-            "ec2".to_string(), EXAMPLE_TARGET.to_string(),
+            "ec2".to_string(),
+            EXAMPLE_TARGET.to_string(),
             get_example_resources(),
-            false, "".to_string(), "".to_string(),
+            false,
+            "".to_string(),
+            "".to_string(),
         );
     }
 
@@ -46,9 +52,12 @@ mod tests {
             .create();
 
         let c = Config::new(
-            "ec2".to_string(), EXAMPLE_TARGET.to_string(),
+            "ec2".to_string(),
+            EXAMPLE_TARGET.to_string(),
             get_example_resources(),
-            false, "".to_string(), "".to_string(),
+            false,
+            "".to_string(),
+            "".to_string(),
         );
         assert_eq!(c.get_instance_name(), "test-ec2-instance");
     }

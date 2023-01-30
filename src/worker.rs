@@ -1,6 +1,6 @@
 use crate::config::Config;
 use crate::ws_request;
-use crate::ws_response::{WSRegisterMessage, WSResponseMessage};
+use crate::ws_response::{WSRegisterMessageV1, WSRegisterMessageV2, WSResponseMessage};
 use log::{debug, error, info, warn};
 use rand::Rng;
 use serde::Serialize;
@@ -47,11 +47,16 @@ pub fn handle_request(request_id: String, url: String, tx: Sender<OwnedMessage>)
     }
 }
 
-fn connect_to_server(worker_name: String, config_path: &str) -> Result<(), Box<dyn Error>> {
+fn connect_to_server(
+    worker_name: String,
+    config_path: &str,
+    protocol_version: u16,
+) -> Result<(), Box<dyn Error>> {
     let config = Config::from_file(config_path).unwrap();
     info!(
         "Instance: {}. Connecting to target: {}",
-        config.get_instance_name(), config.target
+        config.get_instance_name(),
+        config.target
     );
     if config.cf_access_enabled {
         debug!(
@@ -124,12 +129,6 @@ fn connect_to_server(worker_name: String, config_path: &str) -> Result<(), Box<d
         }
     });
 
-    // let receive_loop = thread::spawn(move || {
-    //     let static_worker = local_worker.clone().to_string();
-    //     // let local_worker = local_worker.clone().to_owned();
-    //     println!("{}", static_worker);
-    // });
-
     let local_worker = worker_name.clone();
     let receive_loop = thread::spawn(move || {
         // Receive loop
@@ -175,13 +174,24 @@ fn connect_to_server(worker_name: String, config_path: &str) -> Result<(), Box<d
     });
 
     // register
-    let register_message = WSRegisterMessage {
-        message_type: "register".to_string(),
-        instance: instance_name,
-        // worker: worker_name.clone(),
-        // version: 2,
+    let register_json = match protocol_version {
+        1 => {
+            let register_message = WSRegisterMessageV1 {
+                message_type: "register".to_string(),
+                instance: instance_name,
+            };
+            serde_json::to_string(&register_message).unwrap()
+        }
+        _ => {
+            let register_message = WSRegisterMessageV2 {
+                message_type: "register".to_string(),
+                instance: instance_name,
+                worker: worker_name.clone(),
+                version: 2,
+            };
+            serde_json::to_string(&register_message).unwrap()
+        }
     };
-    let register_json = serde_json::to_string(&register_message).unwrap();
     match tx.send(OwnedMessage::Text(register_json)) {
         Ok(()) => (),
         Err(e) => {
@@ -198,10 +208,10 @@ fn connect_to_server(worker_name: String, config_path: &str) -> Result<(), Box<d
     Ok(())
 }
 
-pub fn run_worker(name: String, config_path: &str) {
+pub fn run_worker(name: String, config_path: &str, protocol_version: u16) {
     info!("Worker {} starting", name);
     loop {
-        match connect_to_server(name.clone(), config_path) {
+        match connect_to_server(name.clone(), config_path, protocol_version) {
             Ok(()) => (),
             Err(e) => {
                 error!("Worker {} exited: {:?}", name.clone(), e);

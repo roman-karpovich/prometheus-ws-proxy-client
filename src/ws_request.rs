@@ -1,11 +1,11 @@
 use crate::config::Config;
+use crate::ws_response::WSReadyMessage;
 use log::{debug, error, warn};
 use serde::Deserialize;
 use serde_json::Value;
 use std::sync::mpsc::Sender;
 use std::thread;
 use websocket::OwnedMessage;
-use crate::ws_response::WSReadyMessage;
 
 pub trait WSProxyRequest {
     fn handle(&self, worker: String, config: &Config, tx: Sender<OwnedMessage>);

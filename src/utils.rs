@@ -16,7 +16,9 @@ fn get_domain(domain: &str) -> String {
 
 pub fn get_ec2_instance_name() -> String {
     let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(5)).build().unwrap();
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
 
     let url = format!(
         "{}{}",

@@ -1,10 +1,10 @@
+use crate::utils::get_ec2_instance_name;
 use serde::{de, Deserialize};
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use crate::utils::get_ec2_instance_name;
 
 fn default_empty_string() -> String {
     "".to_string()
@@ -15,8 +15,8 @@ fn default_false() -> bool {
 }
 
 fn deserialize_bool<'de, D>(deserializer: D) -> Result<bool, D::Error>
-    where
-        D: de::Deserializer<'de>,
+where
+    D: de::Deserializer<'de>,
 {
     let v: bool = de::Deserialize::deserialize(deserializer)?;
     Ok(v)
