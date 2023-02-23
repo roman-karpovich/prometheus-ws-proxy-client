@@ -15,6 +15,13 @@ rand = "0.8"
 log = "0.4"
 env_logger = "0.10.0"
 websocket = "0.26"
+futures = "0.3.26"
+futures-util = "0.3.26"
+futures-channel = "0.3.26"
+tokio-tungstenite = { version = "*", features = ["native-tls"] }
+url = "*"
+tokio = { version="1.25.0", features=["full"]}
+async-trait = "0.1.64"
 
 [dev-dependencies]
-mockito = "0.31"
+mockito = "0.32.3"

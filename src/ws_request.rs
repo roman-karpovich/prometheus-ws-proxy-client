@@ -1,14 +1,16 @@
 use crate::config::Config;
 use crate::ws_response::WSReadyMessage;
+use async_trait::async_trait;
+use futures::channel::mpsc::UnboundedSender;
+use futures_util::SinkExt;
 use log::{debug, error, warn};
 use serde::Deserialize;
 use serde_json::Value;
-use std::sync::mpsc::Sender;
-use std::thread;
-use websocket::OwnedMessage;
+use tokio_tungstenite::tungstenite::Message;
 
+#[async_trait]
 pub trait WSProxyRequest {
-    fn handle(&self, worker: String, config: &Config, tx: Sender<OwnedMessage>);
+    async fn handle(&self, worker: String, config: Config, mut tx: UnboundedSender<Message>);
 }
 
 #[derive(Deserialize, Debug)]
@@ -16,8 +18,9 @@ pub struct WSProxyReadyRequest {
     pub uid: String,
 }
 
+#[async_trait]
 impl WSProxyRequest for WSProxyReadyRequest {
-    fn handle(&self, worker: String, _config: &Config, tx: Sender<OwnedMessage>) {
+    async fn handle(&self, worker: String, _config: Config, mut tx: UnboundedSender<Message>) {
         let response_message = WSReadyMessage {
             message_type: "ready".to_string(),
             uid: self.uid.clone(),
@@ -25,7 +28,7 @@ impl WSProxyRequest for WSProxyReadyRequest {
         };
         let response_json = serde_json::to_string(&response_message).unwrap();
         debug!("{:?}", response_json);
-        match tx.send(OwnedMessage::Text(response_json)) {
+        match tx.send(Message::Text(response_json)).await {
             Ok(()) => (),
             Err(e) => {
                 error!("Handle Request: {:?}", e);
@@ -40,13 +43,14 @@ pub struct WSProxyCallRequest {
     pub resource: String,
 }
 
+#[async_trait]
 impl WSProxyRequest for WSProxyCallRequest {
-    fn handle(&self, _worker: String, config: &Config, tx: Sender<OwnedMessage>) {
+    async fn handle(&self, _worker: String, config: Config, tx: UnboundedSender<Message>) {
         let uid = self.uid.clone();
-        let resource_name = &self.resource;
+        let resource_name = self.resource.to_string();
         debug!("Handling request {}: {}", uid, resource_name);
         let resource_map = &config.resources;
-        let resource_url = resource_map.get(resource_name);
+        let resource_url = resource_map.get(resource_name.as_str());
         if resource_url.is_none() {
             warn!("unable to find resource with name {}", resource_name);
             return;
@@ -56,16 +60,20 @@ impl WSProxyRequest for WSProxyCallRequest {
 
         debug!("resource_url: {}", resource_url);
 
-        thread::spawn(|| crate::worker::handle_request(uid, resource_url, tx));
+        crate::worker::handle_request(uid, resource_url, tx).await;
     }
 }
 
 #[derive(Deserialize, Debug)]
 pub struct WSProxyPing {}
 
+#[async_trait]
 impl WSProxyRequest for WSProxyPing {
-    fn handle(&self, _worker: String, _config: &Config, tx: Sender<OwnedMessage>) {
-        match tx.send(OwnedMessage::Text("{\"type\": \"pong\"}".to_string())) {
+    async fn handle(&self, _worker: String, _config: Config, mut tx: UnboundedSender<Message>) {
+        match tx
+            .send(Message::Text("{\"type\": \"pong\"}".to_string()))
+            .await
+        {
             Ok(()) => (),
             Err(e) => {
                 error!("Handle Request: {:?}", e);
@@ -76,8 +84,9 @@ impl WSProxyRequest for WSProxyPing {
 
 pub struct WSProxyUnknownRequest {}
 
+#[async_trait]
 impl WSProxyRequest for WSProxyUnknownRequest {
-    fn handle(&self, _worker: String, _config: &Config, _tx: Sender<OwnedMessage>) {
+    async fn handle(&self, _worker: String, _config: Config, _tx: UnboundedSender<Message>) {
         warn!("Unknown request")
     }
 }

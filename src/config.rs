@@ -22,7 +22,7 @@ where
     Ok(v)
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct Config {
     instance: String,
     pub target: String,
@@ -36,6 +36,27 @@ pub struct Config {
 }
 
 impl Config {
+    #[cfg(test)]
+    pub fn new(
+        instance: String,
+        target: String,
+        resources: HashMap<String, String>,
+        cf_access_enabled: bool,
+        cf_access_key: String,
+        cf_access_secret: String,
+    ) -> Config {
+        let mut c = Config {
+            instance: "".to_string(),
+            target,
+            resources,
+            cf_access_enabled,
+            cf_access_key,
+            cf_access_secret,
+        };
+        c.set_instance_name(instance);
+        c
+    }
+
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Config, Box<dyn Error>> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
