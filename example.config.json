@@ -1,6 +1,6 @@
 {
   "instance": "foo",
-  "target": "http://localhost:8081/proxy/ws/",
+  "target": "wss://localhost:8081/proxy/ws/",
   "resources": {
     "node": "https://localhost:9100",
     "example": "https://example.com"
