@@ -24,12 +24,18 @@ pub struct ResourceResponse {
 
 async fn call_resource(url: String) -> Result<ResourceResponse, Box<dyn Error>> {
     debug!("{}", url);
-    let response = reqwest::get(url).await?;
-    let r = ResourceResponse {
-        status: response.status().as_u16(),
-        body: response.text().await?,
-    };
-    Ok(r)
+    let response = reqwest::get(url).await;
+
+    Ok(match response {
+        Ok(r) => ResourceResponse {
+            status: r.status().as_u16(),
+            body: r.text().await?,
+        },
+        Err(_) => ResourceResponse {
+            status: 500,
+            body: "".to_string(),
+        },
+    })
 }
 
 pub async fn handle_request(request_id: String, url: String, mut tx: UnboundedSender<Message>) {

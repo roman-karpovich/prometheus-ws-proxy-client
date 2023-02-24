@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::ws_response::WSReadyMessage;
+use crate::ws_response::{WSReadyMessage, WSResponseMessage};
 use async_trait::async_trait;
 use futures::channel::mpsc::UnboundedSender;
 use futures_util::SinkExt;
@@ -45,7 +45,7 @@ pub struct WSProxyCallRequest {
 
 #[async_trait]
 impl WSProxyRequest for WSProxyCallRequest {
-    async fn handle(&self, _worker: String, config: Config, tx: UnboundedSender<Message>) {
+    async fn handle(&self, _worker: String, config: Config, mut tx: UnboundedSender<Message>) {
         let uid = self.uid.clone();
         let resource_name = self.resource.to_string();
         debug!("Handling request {}: {}", uid, resource_name);
@@ -53,6 +53,20 @@ impl WSProxyRequest for WSProxyCallRequest {
         let resource_url = resource_map.get(resource_name.as_str());
         if resource_url.is_none() {
             warn!("unable to find resource with name {}", resource_name);
+            let response_message = WSResponseMessage {
+                message_type: "response".to_string(),
+                uid,
+                body: "No such resource".to_string(),
+                status: 404,
+            };
+            let response_json = serde_json::to_string(&response_message).unwrap();
+            debug!("{:?}", response_json);
+            match tx.send(Message::Text(response_json)).await {
+                Ok(()) => (),
+                Err(e) => {
+                    error!("Handle Request: {:?}", e);
+                }
+            }
             return;
         }
 

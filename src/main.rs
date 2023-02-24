@@ -1,7 +1,7 @@
 extern crate websocket;
 
 use clap::{arg, value_parser, ArgAction, Command};
-use log::info;
+use log::{debug, info};
 use names::Generator;
 
 use tokio;
@@ -31,8 +31,28 @@ pub async fn main() {
                 .action(ArgAction::Set)
                 .value_parser(value_parser!(u16))
                 .default_value("2"),
+            arg!(--sentry_dsn ... "sentry DSN")
+                .action(ArgAction::Set)
+                .value_parser(value_parser!(String)),
         ])
         .get_matches();
+
+    let sentry_dsn = matches.get_one::<String>("sentry_dsn");
+    let _guard;
+    match sentry_dsn {
+        Some(sentry_dsn) => {
+            debug!("got {} as sentry dsn", sentry_dsn);
+            _guard = sentry::init((sentry_dsn.clone(), sentry::ClientOptions {
+                release: sentry::release_name!(),
+                attach_stacktrace: true,
+                ..Default::default()
+            }));
+            info!("Sentry configured");
+        },
+        None => {
+            info!("Sentry not configured");
+        }
+    };
 
     let config_path = matches.get_one::<String>("config").unwrap();
     info!("Using config {}", config_path);
