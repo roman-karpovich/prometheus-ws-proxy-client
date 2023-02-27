@@ -13,12 +13,14 @@ mod worker;
 mod ws_request;
 mod ws_response;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[tokio::main]
 pub async fn main() {
     env_logger::init();
 
     let matches = Command::new("Prometheus websocket proxy")
-        .version("2.0.1")
+        .version(VERSION)
         .author("Roman Karpovich <fpm.th13f@gmail.com>")
         .about("Connects to websocket server to call local resources")
         .args(&[
@@ -42,13 +44,16 @@ pub async fn main() {
     match sentry_dsn {
         Some(sentry_dsn) => {
             debug!("got {} as sentry dsn", sentry_dsn);
-            _guard = sentry::init((sentry_dsn.clone(), sentry::ClientOptions {
-                release: sentry::release_name!(),
-                attach_stacktrace: true,
-                ..Default::default()
-            }));
+            _guard = sentry::init((
+                sentry_dsn.clone(),
+                sentry::ClientOptions {
+                    release: sentry::release_name!(),
+                    attach_stacktrace: true,
+                    ..Default::default()
+                },
+            ));
             info!("Sentry configured");
-        },
+        }
         None => {
             info!("Sentry not configured");
         }
