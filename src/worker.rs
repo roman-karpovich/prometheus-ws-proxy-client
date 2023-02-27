@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::ws_request;
 use crate::ws_response::{WSRegisterMessageV1, WSRegisterMessageV2, WSResponseMessage};
+use futures_util::try_join;
 use log::{debug, error, info, warn};
 use rand::Rng;
 use serde::Serialize;
@@ -12,6 +13,7 @@ use std::time::Duration;
 use futures::channel::mpsc::UnboundedSender;
 
 use futures_util::{future, pin_mut, SinkExt, StreamExt};
+
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -54,6 +56,38 @@ pub async fn handle_request(request_id: String, url: String, mut tx: UnboundedSe
         Err(e) => {
             error!("Handle Request: {:?}", e);
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct PingFailureError {}
+
+impl std::fmt::Display for PingFailureError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unable to ping server")
+    }
+}
+
+impl Error for PingFailureError {}
+
+async fn ping_server(
+    worker_name: String,
+    mut tx: UnboundedSender<Message>,
+) -> Result<(), Box<dyn Error>> {
+    loop {
+        match tx
+            .send(Message::Ping(worker_name.clone().into_bytes()))
+            .await
+        {
+            Ok(()) => {
+                debug!("Server ping ok")
+            }
+            Err(e) => {
+                error!("Unable to ping server: {:?}", e);
+                return Err(PingFailureError {})?;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(60000)).await;
     }
 }
 
@@ -109,12 +143,11 @@ async fn connect_to_server(
             let message = match msg {
                 Ok(m) => m,
                 Err(e) => {
-                    debug!("Receive Loop: {:?}", e);
+                    debug!("Receive Loop (global): {:?}", e);
                     let _ = tx.clone().send(Message::Close(None));
                     return;
                 }
             };
-            debug!("message: {:?}", message.clone());
             match message {
                 Message::Close(_) => {
                     debug!("Close received");
@@ -122,27 +155,31 @@ async fn connect_to_server(
                     let _ = local_tx.send(Message::Close(None));
                     return;
                 }
-                Message::Ping(data) => {
+                Message::Ping(_data) => {
                     debug!("Ping received");
-                    match local_tx.send(Message::Pong(data)).await {
-                        // Send a pong in response
-                        Ok(()) => (),
-                        Err(e) => {
-                            error!("Receive Loop: {:?}", e);
-                            return;
-                        }
-                    }
+                    return;
                 }
                 Message::Text(value) => {
-                    debug!("Receive Loop: {:?}", value);
+                    debug!("Text received: {:?}", value);
                     let request = ws_request::read_ws_message(value);
                     request
                         .handle(local_worker.clone(), local_config, local_tx)
                         .await;
                     return;
                 }
+                Message::Pong(value) => {
+                    match String::from_utf8(value) {
+                        Ok(text) => {
+                            debug!("Pong received: {}", text)
+                        }
+                        Err(e) => {
+                            warn!("Unable to parse pong: {:?}", e)
+                        }
+                    };
+                    return;
+                }
                 _ => {
-                    warn!("Receive Loop (unknown message): {:?}", message);
+                    warn!("Unknown message: {:?}", message);
                     return;
                 }
             }
@@ -178,7 +215,10 @@ async fn connect_to_server(
     info!("Successfully registered");
 
     pin_mut!(rx_to_ws, ws_to_stdout);
-    future::select(rx_to_ws, ws_to_stdout).await;
+    let _ = try_join!(
+        async { Ok(future::select(rx_to_ws, ws_to_stdout).await) },
+        ping_server(worker_name.clone(), tx.clone())
+    );
 
     info!("Exited");
 
