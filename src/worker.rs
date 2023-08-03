@@ -143,6 +143,7 @@ async fn connect_to_server(
             let message = match msg {
                 Ok(m) => m,
                 Err(e) => {
+                    // todo: handle Protocol(ResetWithoutClosingHandshake)
                     debug!("Receive Loop (global): {:?}", e);
                     let _ = tx.clone().send(Message::Close(None));
                     return;
