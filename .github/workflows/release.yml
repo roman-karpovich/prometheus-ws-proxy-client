@@ -14,7 +14,7 @@ jobs:
         include:
           - target: x86_64-unknown-linux-musl
             archive: tar.gz
-        os: [ ubuntu-22.04, ubuntu-20.04, ubuntu-18.04 ]
+        os: [ ubuntu-22.04, ubuntu-20.04, ubuntu-18.04, ubuntu-18.04 ]
     steps:
       - uses: actions/checkout@master
       - name: Compile and release
@@ -25,4 +25,4 @@ jobs:
           TOOLCHAIN_VERSION: nightly
           RUSTTARGET: ${{ matrix.target }}
           ARCHIVE_TYPES: ${{ matrix.archive }}
-          ARCHIVE_NAME: prometheus-ws-proxy-client_${{ matrix.os }}_${{ matrix.target }}.${{ matrix.archive }}
+          ARCHIVE_NAME: prometheus-ws-proxy-client_${{ matrix.os }}_${{ matrix.target }}
