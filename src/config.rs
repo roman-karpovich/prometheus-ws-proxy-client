@@ -22,6 +22,10 @@ where
     Ok(v)
 }
 
+fn ec2_meta_domain() -> String {
+    "http://169.254.169.254".to_string()
+}
+
 #[derive(Deserialize, Debug, Clone)]
 pub struct Config {
     instance: String,
@@ -33,6 +37,8 @@ pub struct Config {
     pub cf_access_key: String,
     #[serde(default = "default_empty_string")]
     pub cf_access_secret: String,
+    #[serde(default = "ec2_meta_domain")]
+    ec2_meta_domain: String
 }
 
 impl Config {
@@ -44,6 +50,7 @@ impl Config {
         cf_access_enabled: bool,
         cf_access_key: String,
         cf_access_secret: String,
+        ec2_meta_domain: String,
     ) -> Config {
         let mut c = Config {
             instance: "".to_string(),
@@ -52,6 +59,7 @@ impl Config {
             cf_access_enabled,
             cf_access_key,
             cf_access_secret,
+            ec2_meta_domain,
         };
         c.set_instance_name(instance);
         c
@@ -72,7 +80,7 @@ impl Config {
     pub fn set_instance_name(&mut self, value: String) {
         let mut instance_name = value;
         if instance_name == "ec2" {
-            instance_name = get_ec2_instance_name();
+            instance_name = get_ec2_instance_name(&self.ec2_meta_domain)
         }
         self.instance = instance_name;
     }

@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::config::Config;
-    use mockito::mock;
+    use mockito::Server;
     use std::collections::HashMap;
 
     fn get_example_resources() -> HashMap<String, String> {
@@ -22,6 +22,7 @@ mod tests {
             false,
             "".to_string(),
             "".to_string(),
+            "".to_string(),
         );
         assert_eq!(c.get_instance_name(), "test");
     }
@@ -29,7 +30,8 @@ mod tests {
     #[test]
     #[should_panic(expected = "Unable to resolve instance name. Maybe it's not ec2 instance?")]
     fn test_ec2_instance_name_panic() {
-        let _mc = mock("GET", "/latest/meta-data/instance-id")
+        let mut server = Server::new();
+        let _mc = server.mock("GET", "/latest/meta-data/instance-id")
             .with_status(502)
             .create();
 
@@ -40,12 +42,14 @@ mod tests {
             false,
             "".to_string(),
             "".to_string(),
+            server.url(),
         );
     }
 
     #[test]
     fn test_ec2_instance_name() {
-        let _mc = mock("GET", "/latest/meta-data/instance-id")
+        let mut server = Server::new();
+        let _mc = server.mock("GET", "/latest/meta-data/instance-id")
             .with_status(200)
             .with_header("content-type", "text/plain")
             .with_body("test-ec2-instance")
@@ -58,6 +62,7 @@ mod tests {
             false,
             "".to_string(),
             "".to_string(),
+            server.url(),
         );
         assert_eq!(c.get_instance_name(), "test-ec2-instance");
     }
