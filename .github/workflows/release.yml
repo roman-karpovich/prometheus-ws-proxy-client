@@ -6,8 +6,8 @@ on:
 
 jobs:
   release:
-    name: release ${{ matrix.os }} ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
+    name: release ubuntu-${{ matrix.ubuntu_version }} rust-${{ matrix.rust_version }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
